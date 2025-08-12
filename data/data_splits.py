@@ -12,10 +12,11 @@ _TFREC_FEATURES = {
 }
 
 def _decode_image(image_bytes: tf.Tensor) -> tf.Tensor:
-    image = tf.image.decode_jpeg(image_bytes, channels=3)
-    image = (tf.cast(image, tf.float32) / 127.5) - 1.0  # [-1, 1]
-    image = tf.reshape(image, [*IMAGE_SIZE, 3])
-    return image
+    img = tf.image.decode_jpeg(image_bytes, channels=3)
+    img = tf.image.resize(img, IMAGE_SIZE, method="bilinear")  # <-- resize
+    img = tf.cast(img, tf.float32) / 127.5 - 1.0               # [-1, 1]
+    return img
+
 
 def _parse_return_name(example: tf.Tensor) -> Tuple[tf.Tensor, tf.Tensor]:
     ex = tf.io.parse_single_example(example, _TFREC_FEATURES)
