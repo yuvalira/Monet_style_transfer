@@ -1,9 +1,9 @@
-import os
+# deterministic_photo_split.py
 import tensorflow as tf
-from typing import List, Tuple, Optional
+from typing import Tuple
 
 AUTOTUNE = tf.data.AUTOTUNE
-IMAGE_SIZE = [256, 256]
+IMAGE_SIZE = (256, 256)
 
 _TFREC_FEATURES = {
     "image_name": tf.io.FixedLenFeature([], tf.string),
@@ -13,10 +13,9 @@ _TFREC_FEATURES = {
 
 def _decode_image(image_bytes: tf.Tensor) -> tf.Tensor:
     img = tf.image.decode_jpeg(image_bytes, channels=3)
-    img = tf.image.resize(img, IMAGE_SIZE, method="bilinear")  # <-- resize
-    img = tf.cast(img, tf.float32) / 127.5 - 1.0               # [-1, 1]
+    img = tf.image.resize(img, IMAGE_SIZE, method="bilinear")
+    img = tf.cast(img, tf.float32) / 127.5 - 1.0   # [-1, 1]
     return img
-
 
 def _parse_return_name(example: tf.Tensor) -> Tuple[tf.Tensor, tf.Tensor]:
     ex = tf.io.parse_single_example(example, _TFREC_FEATURES)
@@ -24,99 +23,67 @@ def _parse_return_name(example: tf.Tensor) -> Tuple[tf.Tensor, tf.Tensor]:
     name = ex["image_name"]
     return img, name
 
-def _parse_image_only(example: tf.Tensor) -> tf.Tensor:
-    ex = tf.io.parse_single_example(example, _TFREC_FEATURES)
-    return _decode_image(ex["image"])
+def _photo_files(gcs_path: str):
+    return tf.io.gfile.glob(f"{gcs_path}/photo_tfrec/*.tfrec")
 
-def _glob_domain_files(gcs_path: str) -> Tuple[List[str], List[str]]:
-    monet = tf.io.gfile.glob(f"{gcs_path}/monet_tfrec/*.tfrec")
-    photo = tf.io.gfile.glob(f"{gcs_path}/photo_tfrec/*.tfrec")
-    return monet, photo
+def _is_in_split(name: tf.Tensor, split: tf.Tensor, train_ratio: tf.Tensor, seed: tf.Tensor) -> tf.Tensor:
+    """
+    Deterministic split based on hashing(image_name || seed).
+    No external files; identical across notebooks when seed/train_ratio match.
+    """
+    salted = tf.strings.join([name, tf.strings.as_string(seed)], separator=":")
+    bucket = tf.strings.to_hash_bucket_fast(salted, 10_000)
+    cutoff = tf.cast(tf.math.round(train_ratio * 10_000.0), tf.int64)
+    is_train = bucket < cutoff
+    return tf.where(tf.equal(split, "train"), is_train, tf.logical_not(is_train))
 
-def _collect_names(tfrec_files: List[str], limit: Optional[int] = None) -> List[bytes]:
-    names: List[bytes] = []
-    ds = tf.data.TFRecordDataset(tfrec_files, num_parallel_reads=AUTOTUNE).map(
-        lambda e: tf.io.parse_single_example(e, _TFREC_FEATURES)["image_name"],
-        num_parallel_calls=AUTOTUNE,
-    )
-    for i, n in enumerate(ds.as_numpy_iterator()):
-        names.append(n)
-        if limit is not None and i + 1 >= limit:
-            break
-    return names
-
-def create_manifests(
+def load_photo_split(
     gcs_path: str,
-    out_dir: str = "data/splits",
+    split: str,                 # "train" or "test"
     train_ratio: float = 0.9,
     seed: int = 42,
-) -> None:
-    tf.io.gfile.makedirs(out_dir)
-    monet_files, photo_files = _glob_domain_files(gcs_path)
-
-    monet_names = _collect_names(monet_files)
-    photo_names = _collect_names(photo_files)
-
-    # deterministic shuffle
-    monet_names = tf.random.shuffle(monet_names, seed=seed).numpy().tolist()
-    photo_names = tf.random.shuffle(photo_names, seed=seed + 1).numpy().tolist()
-
-    def _split(names: List[bytes]) -> Tuple[List[bytes], List[bytes]]:
-        n_train = int(len(names) * train_ratio)
-        return names[:n_train], names[n_train:]
-
-    monet_tr, monet_te = _split(monet_names)
-    photo_tr, photo_te = _split(photo_names)
-
-    def _write(path: str, arr: List[bytes]) -> None:
-        with tf.io.gfile.GFile(path, "w") as f:
-            for b in arr:
-                f.write(b.decode("utf-8") + "\n")
-
-    _write(os.path.join(out_dir, "train_monet.txt"), monet_tr)
-    _write(os.path.join(out_dir, "test_monet.txt"), monet_te)
-    _write(os.path.join(out_dir, "train_photo.txt"), photo_tr)
-    _write(os.path.join(out_dir, "test_photo.txt"), photo_te)
-
-def _load_manifest(path: str) -> tf.lookup.StaticHashTable:
-    with tf.io.gfile.GFile(path, "r") as f:
-        keys = [line.strip() for line in f if line.strip()]
-    keys_tf = tf.constant(keys, dtype=tf.string)
-    vals_tf = tf.ones_like(keys_tf, dtype=tf.int64)
-    table = tf.lookup.StaticHashTable(
-        tf.lookup.KeyValueTensorInitializer(keys_tf, vals_tf), default_value=0
-    )
-    return table
-
-def load_split(
-    gcs_path: str,
-    domain: str,            # "photo" or "monet"
-    split: str,             # "train" or "test"
     batch_size: int = 1,
     shuffle: bool = False,
     repeat: bool = False,
-    seed: int = 42,
 ) -> tf.data.Dataset:
-    assert domain in ("photo", "monet")
     assert split in ("train", "test")
-
-    monet_files, photo_files = _glob_domain_files(gcs_path)
-    files = monet_files if domain == "monet" else photo_files
-
-    manifest_path = f"data/splits/{split}_{domain}.txt"
-    table = _load_manifest(manifest_path)
-
-    def _keep(img: tf.Tensor, name: tf.Tensor) -> tf.Tensor:
-        return tf.greater(table.lookup(name), 0)
+    files = _photo_files(gcs_path)
 
     ds = tf.data.TFRecordDataset(files, num_parallel_reads=AUTOTUNE)
     ds = ds.map(_parse_return_name, num_parallel_calls=AUTOTUNE)
-    ds = ds.filter(_keep)
+
+    # filter by deterministic split
+    ds = ds.filter(lambda img, name: _is_in_split(
+        name,
+        tf.constant(split),
+        tf.constant(train_ratio, tf.float32),
+        tf.constant(seed, tf.int64))
+    )
+
+    # drop names after filtering
     ds = ds.map(lambda img, name: img, num_parallel_calls=AUTOTUNE)
 
     if shuffle:
         ds = ds.shuffle(2048, seed=seed, reshuffle_each_iteration=True)
     if repeat:
         ds = ds.repeat()
+
     ds = ds.batch(batch_size).prefetch(AUTOTUNE)
     return ds
+
+# Counters for sanity checking identical splits in both notebooks
+def count_examples(gcs_path: str, train_ratio: float = 0.9, seed: int = 42) -> Tuple[int, int]:
+    files = _photo_files(gcs_path)
+    ds = tf.data.TFRecordDataset(files, num_parallel_reads=AUTOTUNE).map(_parse_return_name, num_parallel_calls=AUTOTUNE)
+
+    def _to_flags(name):
+        salted = tf.strings.join([name, tf.strings.as_string(seed)], separator=":")
+        bucket = tf.strings.to_hash_bucket_fast(salted, 10_000)
+        cutoff = tf.cast(tf.math.round(train_ratio * 10_000.0), tf.int64)
+        return bucket < cutoff
+
+    flags = ds.map(lambda img, name: _to_flags(name), num_parallel_calls=AUTOTUNE)
+    n_train = sum(int(x) for x in flags.as_numpy_iterator())
+    total = sum(1 for _ in tf.data.TFRecordDataset(files))
+    n_test = total - n_train
+    return n_train, n_test
