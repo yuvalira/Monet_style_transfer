@@ -67,4 +67,4 @@ monet-style-transfer/
 * **Yuval Ratzabi**
 
 This project is part of the final assignment for the course:
-\*\*"Deep Learning and its Applications to Signal and Image Processing and Analysis" — Spring 2025, Ben-Gurion University
+"Deep Learning and its Applications to Signal and Image Processing and Analysis" — Spring 2025, Ben-Gurion University
