@@ -21,8 +21,8 @@ We use the dataset from the Kaggle competition:
 
 It contains:
 
-* \7,038 real-world landscape photos
-* \300 Monet-style paintings
+* 7,038 real-world landscape photos
+* 300 Monet-style paintings
 * No aligned pairs → an **unpaired image translation** task
 
 ## Results
