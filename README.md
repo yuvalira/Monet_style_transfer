@@ -1,105 +1,70 @@
-# Monet Style Transfer 
+# Monet Style Transfer
 
-This repository contains the code, models, and report for our final project in the course:  
+This repository contains the code, models, and report for our final project in the course:
 **Deep Learning and its Applications to Signal and Image Processing and Analysis (361.2.1120)**
 
 ## Project Overview
 
-The goal of this project is to translate real-world photographs into **Monet-style paintings**, using unsupervised **image-to-image translation** methods.
+The goal of this project is to translate real-world photographs into **Monet-style paintings** using unsupervised **image-to-image translation**.
 
-We compare two deep generative models:  
-1. **CycleGAN (ResNet-based)** — A vanilla implementation that uses residual blocks in the generator.  
-2. **CycleGAN with U-Net Generator** — An improved version using U-Net architecture with skip connections to better preserve structural details during translation.
+We implemented and compared two models:
 
-We evaluate both models quantitatively using the **MiFID** score (memorization-informed Fréchet Inception Distance) and qualitatively with visual examples.
+1. **Vanilla CycleGAN (U-Net based)** — Uses U-Net generators with adversarial, cycle-consistency, identity, and discriminator losses.
+2. **Improved CycleGAN** — Extends the vanilla version with **self-attention layers**, **perceptual loss** (VGG-based feature similarity), and the **LSGAN loss** for more stable adversarial training.
+
+We evaluate both models quantitatively using the **MiFID** score and qualitatively with visual examples.
 
 ## Dataset
 
-We use the dataset from the Kaggle competition:  
+We use the dataset from the Kaggle competition:
 **[I’m Something of a Painter Myself](https://www.kaggle.com/competitions/gan-getting-started)**
 
 It contains:
-- ~7,000 real-world landscape photos.
-- ~300 Monet-style paintings.
-- No aligned pairs → **unpaired image translation** task.
 
-To download the dataset manually:
-1. Visit the competition link above and accept the rules.
-2. Download the ZIP file and extract it into `./data/`.
+* \7,038 real-world landscape photos
+* \300 Monet-style paintings
+* No aligned pairs → an **unpaired image translation** task
+
+## Results
+
+* **Vanilla U-Net CycleGAN**: MiFID = **92.92**
+* **Improved CycleGAN (Self-Attention + Perceptual Loss + LSGAN)**: MiFID = **87.14**
+
+Lower MiFID indicates better similarity between generated Monet paintings and real Monet data. Visual examples of success and failure cases are included in the `results/` folder.
 
 ## Related Papers
 
-This project is inspired by the following papers studied in the course:
-- [CycleGAN: Unpaired Image-to-Image Translation](https://arxiv.org/abs/1703.10593) — Zhu et al., 2017  
-- [U-Net: Convolutional Networks for Biomedical Image Segmentation](https://arxiv.org/abs/1505.04597) — Ronneberger et al., 2015  
-- [GANs: Generative Adversarial Networks](https://arxiv.org/abs/1406.2661) — Goodfellow et al., 2014  
-- Metric: [FID and MiFID](https://arxiv.org/abs/2002.09797)
+This project was inspired by the following works:
+
+* [CycleGAN: Unpaired Image-to-Image Translation](https://arxiv.org/abs/1703.10593) — Zhu et al., 2017
+* [U-Net: Convolutional Networks for Biomedical Image Segmentation](https://arxiv.org/abs/1505.04597) — Ronneberger et al., 2015
+* [Self-Attention GAN](https://arxiv.org/abs/1805.08318) — Zhang et al., 2019
+* [Perceptual Losses for Real-Time Style Transfer](https://arxiv.org/abs/1603.08155) — Johnson et al., 2016
+* [Least Squares GAN (LSGAN)](https://arxiv.org/abs/1611.04076) — Mao et al., 2017
+* Metric: [FID and MiFID](https://arxiv.org/abs/2002.09797)
 
 ## Folder Structure
 
 ```
-monet-style-transfer-final/
+monet-style-transfer/
 ├── README.md                  # This file
 ├── report/
-│   └── final_report.pdf       # Final report (submitted version)
+│   └── final_report.pdf       # Final report
 ├── models/
-│   ├── base_cyclegan.py       # ResNet-based CycleGAN generator and discriminator
-│   └── unet_cyclegan.py       # U-Net-based CycleGAN generator
-├── train/
-│   ├── train_base.py          # Training script for baseline model
-│   └── train_unet.py          # Training script for improved U-Net model
+│   ├── Monet_CycleGan_VanillaModel.py       # Vanilla U-Net CycleGAN
+│   └── Monet_CycleGan_ImprovedModel.py   # Improved CycleGAN with attention + losses
 ├── data/
-│   ├── instructions_to_download.txt # Notes for downloading the dataset
-│   └── trainA/, trainB/, testA/, testB/ # Organized dataset
+│   ├── EDA_monet.ipynb                    # Dataset Analysis
+│   └── data_splits.ipynb                  # Data Split for test and train sets
 ├── results/
-│   ├── fid_scores.csv         # MiFID scores for all models
-│   └── sample_outputs/        # Visual outputs for both models
-└── utils/
-    └── metrics.py             # Code for computing MiFID
+│   ├── MiFID.py               # MiFID compute functions
+│   └── sample_outputs/        # Example outputs
 ```
-
-## How to Run
-
-> Environment: Python 3.10, PyTorch, Colab Pro recommended
-
-1. Clone the repo  
-   ```bash
-   git clone https://github.com/your_username/monet-style-transfer-final.git
-   cd monet-style-transfer-final
-   ```
-
-2. Download the dataset from Kaggle and place it in `./data/`.
-
-3. Train the baseline model:
-   ```bash
-   python train/train_base.py
-   ```
-
-4. Train the U-Net model:
-   ```bash
-   python train/train_unet.py
-   ```
-
-5. Generate translated images and compute MiFID:
-   ```bash
-   python utils/metrics.py
-   ```
-
-## Evaluation
-
-We evaluate both models on:
-- **Quantitative metric:** MiFID (lower is better).
-- **Qualitative results:** Success/failure cases shown in the report.
-- **Ablation Study:** We evaluate the importance of the U-Net structure by comparing to ResNet generator.
 
 ## Project Authors
 
-- Shahar Ain Kedem
-- Yuval Ratzabi
+* **Shahar Ain Kedem**
+* **Yuval Ratzabi**
 
-This project is part of the final assignment for the course:  
-**"Deep Learning and its Applications to Signal and Image Processing and Analysis" — Spring 2025, Ben-Gurion University**
-
-## License
-
-This repository is for educational purposes only.
+This project is part of the final assignment for the course:
+\*\*"Deep Learning and its Applications to Signal and Image Processing and Analysis" — Spring 2025, Ben-Gurion University
