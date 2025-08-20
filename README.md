@@ -2,7 +2,7 @@
 
 This repository contains the code, models, and report for our final project in the course:
 
-Deep Learning and its Applications to Signal and Image Processing and Analysis (361.2.1120) — Spring 2025, Ben-Gurion University
+Deep Learning and its Applications to Signal and Image Processing and Analysis (361.2.1120) — 2025, Ben-Gurion University
 
 ---
 
